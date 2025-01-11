@@ -1,0 +1,278 @@
+---
+title: "Customer Trends And Sales Analysis"
+author: "Nasaka Watitwa"
+date: "2025-01-04"
+output:
+  html_document:
+    code_folding: hide
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+```{r echo=FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(arules))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(scales))
+suppressPackageStartupMessages(library(stringr))
+```
+
+```{r echo=FALSE}
+## Data Importation
+sales = read.csv("Order_Data_meriskill.csv")
+```
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Data overview
+glimpse(sales)
+
+for (c in colnames(sales)) {
+  missing_data <- sum(is.na(sales[[c]]))
+  percentage <- (missing_data / nrow(sales)) * 100
+  print(paste(c, ":", round(percentage, 2), "%"))
+}
+```
+
+```{r echo=FALSE}
+## Data cleaning (Data type conversion)
+sales <- sales %>% 
+  mutate(
+    ProductPrice = as.numeric(ProductPrice),
+    OrderDate = as.Date(OrderDate),
+    )
+```
+
+## Customer Base
+```{r echo=FALSE, results='hide', message=FALSE}
+## Customers Annually
+sales %>% 
+  mutate(Year = as.factor(year(OrderDate))) %>%
+  filter(Year == 2020 | Year == 2021) %>% 
+  group_by(Year) %>% 
+  summarise(
+    customers = n_distinct(CustID)
+  ) %>% 
+  ggplot(aes(x = Year, y = customers)) + 
+  geom_col(fill="#406965") +
+  geom_text(aes(label = customers), vjust = -0.5) +
+  theme(
+    axis.ticks.x=element_blank(), 
+    axis.text.y=element_blank(),  
+    axis.ticks.y=element_blank(), 
+    axis.title.x=element_blank(),
+  )
+```
+
+
+```{r echo=TRUE, message=FALSE}
+## Annual growth rate
+sales %>% 
+  filter(!is.na(OrderDate)) %>% 
+  group_by(Year = year(OrderDate)) %>% 
+  summarise(
+    total_customers = n_distinct(CustID)
+    )%>%
+  mutate(
+         previous_customers = lag(total_customers),
+         growth_rate = round(((total_customers - previous_customers) / previous_customers) * 100,1),
+         new_customers = total_customers - previous_customers,
+         ) %>% 
+  ungroup %>% 
+  filter(Year == 2021) %>% 
+  select(Year, total_customers, new_customers, growth_rate) %>% 
+  kable(caption = "Customer Base Growth")
+
+```
+
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Annual regional growth rate
+sales %>% 
+  filter(!is.na(OrderDate)) %>% 
+  group_by(Country, Year = year(OrderDate)) %>% 
+  summarise(
+    customers = n_distinct(CustID)
+    )%>%
+  mutate(previous_customers = lag(customers),
+         growth_rate = round(((customers - previous_customers) / previous_customers) * 100,1),
+         new_customers = customers - previous_customers,
+         ) %>% 
+    filter(Year == 2021) %>% 
+    select(Year, Country, new_customers, growth_rate) %>% 
+  ggplot() +
+  geom_bar(aes(x = Country, y = new_customers), stat = "identity", fill="#406965") +
+  geom_line(aes(x = Country, y = growth_rate, group = 1), col = "tan2", lwd = 2)+
+  geom_text(aes(label = growth_rate, x = Country, y = growth_rate), color = "black") + 
+  geom_text(aes(label = new_customers, x = Country, y = 0.95 * new_customers), color = "black")
+
+```
+ 
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Annual customer retention rate
+sales %>%
+  filter(!is.na(OrderDate)) %>% 
+  mutate(Year = year(OrderDate)) %>%
+  group_by(Year) %>%
+  summarise(customers = list(unique(CustID))) %>%
+  mutate(
+    previous_year_customers = lag(customers),
+    retained_customers = map2_int(customers, previous_year_customers, ~ length(intersect(.x, .y))),
+    total_customers = map_int(customers, length),
+    retention_rate = round((retained_customers / total_customers) * 100)
+    ) %>% 
+  ungroup %>% 
+  filter(Year == 2021) %>% 
+  select(Year, retention_rate) %>% 
+  kable(caption = "Customer Retention Rate")
+```
+
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Regional Retention Rate
+sales %>%
+  filter(!is.na(OrderDate)) %>% 
+  mutate(Year = year(OrderDate)) %>%
+  group_by(Country, Year) %>%
+  summarise(customers = list(unique(CustID))) %>%
+  mutate(
+    previous_year_customers = lag(customers),
+    retained_customers = map2_int(customers, previous_year_customers, ~ length(intersect(.x, .y))),
+    total_customers = map_int(customers, length),
+    retention_rate = round((retained_customers / total_customers) * 100)
+    ) %>% 
+  ungroup %>% 
+  filter(Year == 2022) %>% 
+  select(Year, Country, retention_rate, retained_customers) %>% 
+  kable(caption = "Regional Retention Rates")
+```
+
+
+## Financial Performance
+```{r echo=FALSE, results='hide', message=FALSE}
+## Revenue growth vs profit growth
+sales %>%
+  group_by(Year = year(OrderDate)) %>%
+  summarise(
+    revenue = round(sum(Amount), 0),
+    COG = sum(OrderQuantity * ProductCost),
+    gross_profit = revenue - COG
+  ) %>%
+  ungroup() %>%
+  mutate(
+    revenue_growth = round((revenue - lag(revenue)) / lag(revenue) * 100,2),
+    profit_growth = round((gross_profit - lag(gross_profit)) / lag(gross_profit) * 100,2)
+  ) %>%
+  filter(Year == 2021, !is.na(Year)) %>%
+  select(Year, revenue, revenue_growth, gross_profit, profit_growth)
+```
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Regional Revenue growth vs Profit growth
+sales %>%
+  group_by(Country, Year = year(OrderDate)) %>%
+  summarise(
+    revenue = round(sum(Amount), 0),
+    COG = sum(OrderQuantity * ProductCost),
+    gross_profit = revenue - COG
+  ) %>%
+  ungroup() %>%
+  mutate(
+    revenue_growth = round((revenue - lag(revenue)) / lag(revenue) * 100,2),
+    profit_growth = round((gross_profit - lag(gross_profit)) / lag(gross_profit) * 100,2)
+  ) %>%
+  filter(Year >= 2021, !is.na(Year)) %>%
+  select(Year, Country, revenue, revenue_growth, gross_profit, profit_growth)
+```
+```{r echo=FALSE, results='hide'}
+## product profitability
+sales %>%
+  group_by(Product_Category, Year = year(OrderDate)) %>%
+  summarise(
+    revenue = round(sum(Amount), 0),
+    COG = sum(OrderQuantity * ProductCost),
+    gross_profit = revenue - COG
+  ) %>%
+  ungroup() %>%
+  mutate(
+    revenue_growth = round((revenue - lag(revenue)) / lag(revenue) * 100,2),
+    profit_growth = round((gross_profit - lag(gross_profit)) / lag(gross_profit) * 100,2)
+  ) %>%
+  filter(Year == 2022, !is.na(Year)) %>%
+  select(Product_Category, revenue, revenue_growth, gross_profit, profit_growth)
+
+```
+
+
+## Campaign Performance
+```{r echo=FALSE, results='hide', message=FALSE}
+## Campaign popularity
+sales %>% 
+  group_by(AcquisitionSource, Year = year(OrderDate)) %>% 
+  summarise(
+    customers = n_distinct(CustID)
+  ) %>% 
+  mutate(
+        growth = (customers - lag(customers)) / lag(customers)*100
+  ) %>% 
+  filter(!is.na(Year)) %>% 
+  select(AcquisitionSource, Year, customers, growth)
+```
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Campaign revenue and profit
+sales %>%
+  group_by( AcquisitionSource, Year = year(OrderDate)) %>%
+  summarise(
+    revenue = round(sum(Amount), 0),
+    COG = sum(OrderQuantity * ProductCost),
+    gross_profit = revenue - COG
+  ) %>%
+  ungroup() %>%
+  mutate(
+    revenue_growth = round((revenue - lag(revenue)) / lag(revenue) * 100,2),
+    profit_growth = round((gross_profit - lag(gross_profit)) / lag(gross_profit) * 100,2)
+  ) %>%
+  filter(Year == 2022, !is.na(Year)) %>%
+  select(Year, AcquisitionSource, revenue, revenue_growth, gross_profit, profit_growth)
+```
+
+```{r echo=FALSE, results ='hide', message=FALSE}
+## Campaign customer retention rate
+sales %>%
+  filter(!is.na(OrderDate)) %>% 
+  group_by( AcquisitionSource, Year = year(OrderDate)) %>%
+  summarise(customers = list(unique(CustID))) %>%
+  mutate(
+    previous_year_customers = lag(customers),
+    retained_customers = map2_int(customers, previous_year_customers, ~ length(intersect(.x, .y))),
+    total_customers = map_int(customers, length),
+    retention_rate = round((retained_customers / total_customers) * 100)
+    ) %>% 
+  ungroup %>% 
+  filter(Year == 2022) %>% 
+  select(Year, AcquisitionSource, retained_customers, retention_rate)
+```
+
+```{r echo=FALSE, results='hide', message=FALSE}
+## Campaign performance regionally
+sales %>% 
+  filter(!is.na(OrderDate)) %>% 
+  group_by(Country, AcquisitionSource, Year = year(OrderDate)) %>% 
+  summarise(
+    customers = n_distinct(CustID)
+    )%>%
+  mutate(previous_customers = lag(customers),
+         growth_rate = round(((customers - previous_customers) / previous_customers) * 100,1),
+         new_customers = customers - previous_customers,
+         ) %>% 
+    filter(Year == 2022) %>% 
+    select(AcquisitionSource, Country, customers, new_customers, growth_rate)
+```
+
+
+
+
+
