@@ -36,7 +36,7 @@ While customer acquisition strategies were highly effective, the low retention r
 **3. Sales Performance:**
   * Revenue grew by 45.2% while profits grew by 52.1% for financial year 2021
   * Canada was the only country recording a decrease in revenue and profits by 15.2% and 4.9% respectively.
-  * *Plants* was the only product category that experienced a decrease in revenue and profits by 3% and 4.5% respectively.
+  * *Pots* was the only product category that experienced a decrease in revenue and profits.
 
 # 💡Recommendations
 1. Balance Marketing Investments:
