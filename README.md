@@ -1,5 +1,5 @@
 # 🛠️ Problem Statement
-Analysing campaign and sales data, this project seeks to provide insights into campaign effectiveness, customer behaviour and overall business health. 
+Analysing campaign and sales data, this project seeks to provide insights into campaign effectiveness, customer behaviour and overall business health for select financial year 2021. 
 
 Analysis done in R and visual representations of key findings were developed in Power BI
 
